@@ -125,7 +125,6 @@ if REDIS_AVAILABLE:
             decode_responses=True,
             socket_connect_timeout=5,  # 5 second timeout
             socket_timeout=5,
-            retry_on_timeout=True,
         )
         # Test connection
         redis_client.ping()
@@ -699,7 +698,7 @@ Return as JSON with these exact fields:
         }
 
         response = requests.post(
-            f"{portia_base_url}/v1/chat/completions", headers=headers, json=payload, timeout=30
+            f"{portia_base_url}/v1/chat/completions", headers=headers, json=payload, timeout=10
         )
 
         if response.status_code == 200:
@@ -815,7 +814,7 @@ Return as JSON:
         }
 
         response = requests.post(
-            f"{portia_base_url}/v1/chat/completions", headers=headers, json=payload, timeout=25
+            f"{portia_base_url}/v1/chat/completions", headers=headers, json=payload, timeout=10
         )
 
         if response.status_code == 200:
@@ -1018,7 +1017,7 @@ def get_releases_cadence(repo) -> Dict[str, Any]:
                 data["last_365_days"] += 1
             if (now - created).days <= 90:
                 data["last_90_days"] += 1
-        if releases:
+        if releases and len(releases) > 0:
             latest = _to_utc(getattr(releases[0], "created_at", None)) or _to_utc(
                 getattr(releases[0], "published_at", None)
             )
@@ -1045,9 +1044,10 @@ def get_pr_flow(repo) -> Dict[str, Any]:
         if merged_deltas:
             s = sorted(merged_deltas)
             mid = len(s) // 2
-            data["median_merge_time_days"] = (
-                s[mid] if len(s) % 2 == 1 else (s[mid - 1] + s[mid]) / 2
-            )
+            if mid < len(s):
+                data["median_merge_time_days"] = (
+                    s[mid] if len(s) % 2 == 1 else (s[mid - 1] + s[mid]) / 2
+                )
     except Exception as e:
         print(f"PR flow error: {e}")
     return data
