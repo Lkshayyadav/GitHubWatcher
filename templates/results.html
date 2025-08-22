@@ -1,0 +1,1783 @@
+{% extends "base.html" %}
+
+{% block title %}Results - GitHub Repository Checker{% endblock %}
+
+{% block head %}
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="min-h-screen py-12">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+        <!-- Header -->
+        <div class="mb-6">
+            <div class="flex items-center justify-between flex-wrap gap-4">
+                <div>
+                    <h1 class="text-2xl md:text-3xl font-bold text-gray-900 mb-1">Repository Analysis</h1>
+                    <p class="text-sm text-gray-600" id="repo-url-display">
+                        {% if github_url %}Results for: <span class="font-mono text-blue-600">{{ github_url }}</span>{% endif %}
+                    </p>
+                </div>
+                <a href="/" class="inline-flex items-center px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors duration-200">
+                    <i class="fas fa-search mr-1"></i>
+                    New Search
+                </a>
+            </div>
+        </div>
+
+        <!-- Search Form + Demo Presets -->
+        <div class="mb-8">
+            <div class="glass-card rounded-xl p-4">
+                <form id="analysis-form" class="search-form">
+                    <div class="relative max-w-3xl mx-auto">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <i class="fab fa-github text-gray-400 text-base"></i>
+                        </div>
+                        <input 
+                            type="url" 
+                            name="q" 
+                            id="repo-url-input"
+                            value="{{ github_url or '' }}"
+                            placeholder="Enter GitHub repository URL (e.g., https://github.com/username/repo)" 
+                            class="cluely-search-input w-full pl-10 pr-24 py-3 text-base rounded-full"
+                            required
+                        >
+                        <button 
+                            type="submit"
+                            id="analyze-button"
+                            class="absolute inset-y-0 right-0 flex items-center pr-2"
+                        >
+                            <span class="btn-primary inline-flex items-center text-sm">
+                                <i class="fas fa-search mr-1"></i>
+                                <span id="button-text">Analyze</span>
+                            </span>
+                        </button>
+                    </div>
+                </form>
+                <div class="mt-3 text-xs text-gray-600">
+                    <span class="mr-2">Try:</span>
+                    <button class="badge-soft mr-1 demo-btn" data-url="https://github.com/psf/requests">psf/requests</button>
+                    <button class="badge-soft mr-1 demo-btn" data-url="https://github.com/tiangolo/fastapi">tiangolo/fastapi</button>
+                    <button class="badge-soft mr-1 demo-btn" data-url="https://github.com/pallets/flask">pallets/flask</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loading State -->
+        <div id="loading-state" class="hidden">
+            <div class="bg-white rounded-lg shadow-md p-8 text-center">
+                <div class="flex flex-col items-center">
+                    <div class="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600 mb-4"></div>
+                    <h3 class="text-xl font-semibold text-gray-900 mb-2">Analyzing Repository</h3>
+                    <p class="text-gray-600" id="loading-message">Fetching repository data from GitHub API...</p>
+                    <div class="mt-4 text-sm text-gray-500">
+                        <div class="flex items-center space-x-4">
+                            <span id="step-github" class="flex items-center">
+                                <i class="fas fa-spinner fa-spin text-blue-500 mr-2"></i>
+                                GitHub API
+                            </span>
+                            <span id="step-scraping" class="flex items-center text-gray-400">
+                                <i class="fas fa-circle mr-2"></i>
+                                Web Scraping
+                            </span>
+                            <span id="step-ai" class="flex items-center text-gray-400">
+                                <i class="fas fa-circle mr-2"></i>
+                                AI Analysis
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Cache Indicator -->
+        <div id="cache-indicator" class="mb-6 hidden">
+            <div class="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center">
+                <i class="fas fa-clock text-green-600 mr-3"></i>
+                <span class="text-green-800 font-medium">Results loaded from cache</span>
+            </div>
+        </div>
+
+        <!-- Portia Status Badge -->
+        <div id="portia-status" class="mb-4 hidden">
+            <div class="inline-flex items-center px-3 py-1 rounded-full border text-sm" id="portia-status-pill">
+                <span class="w-2 h-2 rounded-full mr-2" id="portia-status-dot"></span>
+                <span id="portia-status-text">Portia: Unknown</span>
+            </div>
+        </div>
+
+        <!-- Analysis Results Container -->
+        <div id="analysis-results" class="space-y-8 hidden">
+            <!-- Repository Overview -->
+            <div class="glass-card rounded-2xl p-8 feature-card hover-lift">
+                <div class="flex items-center mb-6">
+                    <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mr-4">
+                        <i class="fab fa-github text-blue-600 text-2xl"></i>
+                    </div>
+                    <div>
+                        <h2 class="text-2xl font-bold text-gray-900">Repository Overview</h2>
+                        <p class="text-gray-600">Basic information about the repository</p>
+                    </div>
+                    <div class="ml-auto">
+                        <button id="share-link" class="btn-primary text-xs px-3 py-1 mr-2"><i class="fas fa-link mr-1"></i>Share</button>
+                        <button id="export-summary" class="btn-primary text-xs px-3 py-1 mr-2"><i class="fas a-download mr-1"></i>Export Summary</button>
+                        <button id="export-pdf" class="btn-primary text-xs px-3 py-1"><i class="fas fa-file-pdf mr-1"></i>Export PDF</button>
+                    </div>
+                </div>
+                
+                <div class="grid md:grid-cols-2 gap-6">
+                    <div id="repo-details">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-3">Repository Details</h3>
+                        <div id="repo-details-content" class="space-y-2">
+                            <!-- Content will be populated by JavaScript -->
+                        </div>
+                    </div>
+                    <div id="repo-stats">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-3">Repository Stats</h3>
+                        <div id="repo-stats-content" class="space-y-2">
+                            <!-- Content will be populated by JavaScript -->
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- README Content Section -->
+                <div id="readme-section" class="mt-6 p-4 bg-gray-50 rounded-lg border hidden">
+                    <div class="flex items-center justify-between mb-3">
+                        <h4 class="text-md font-semibold text-gray-900">📖 README Analysis</h4>
+                        <button id="view-full-readme" class="btn-primary text-sm px-3 py-1">
+                            <i class="fas fa-external-link-alt mr-1"></i>
+                            View Full README
+                        </button>
+                    </div>
+                    
+                    <!-- README Summary -->
+                    <div id="readme-summary" class="mb-3 p-3 bg-blue-50 rounded-lg border-l-4 border-blue-400 hidden">
+                        <h5 class="text-sm font-semibold text-blue-900 mb-1">📋 What this README tells us:</h5>
+                        <p id="readme-summary-content" class="text-sm text-blue-800"></p>
+                    </div>
+                    
+                    <!-- README Preview -->
+                    <div id="readme-preview">
+                        <h5 class="text-sm font-semibold text-gray-700 mb-2">Preview:</h5>
+                        <div id="readme-content" class="text-sm text-gray-700 max-h-40 overflow-y-auto">
+                            <!-- Content will be populated by JavaScript -->
+                        </div>
+                        <div id="readme-meta" class="mt-2 text-xs text-gray-500">
+                            <!-- Content will be populated by JavaScript -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Repository Health Dashboard -->
+            <div id="health-dashboard" class="mt-6 glass-card rounded-xl p-4 hidden feature-card">
+                <div class="flex items-center mb-4">
+                    <div class="w-10 h-10 bg-gradient-to-r from-green-400 to-blue-500 rounded-lg flex items-center justify-center mr-3">
+                        <i class="fas fa-heartbeat text-white text-lg"></i>
+                    </div>
+                    <div>
+                        <h2 class="text-xl font-bold text-gray-900">🏥 Repository Health Dashboard</h2>
+                        <p class="text-sm text-gray-600">Comprehensive analysis and recommendations</p>
+                    </div>
+                </div>
+                
+                <!-- Overall Health Score -->
+                <div class="mb-4">
+                    <div id="overall-health-score" class="text-center p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg">
+                        <div class="text-3xl font-bold text-gray-900 mb-1">
+                            <span id="health-score-number">--</span>/100
+                        </div>
+                        <div id="health-score-label" class="text-base font-semibold mb-1">Loading...</div>
+                        <div id="health-score-description" class="text-sm text-gray-600">Analyzing repository health...</div>
+                    </div>
+                </div>
+                
+                <!-- Health Metrics Grid -->
+                <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+                    <!-- Quality Score -->
+                    <div class="bg-white p-3 rounded-lg border">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-xs text-gray-600">Quality</p>
+                                <p id="quality-score" class="text-xl font-bold text-gray-900">--</p>
+                            </div>
+                            <div class="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                                <i class="fas fa-star text-blue-600 text-sm"></i>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Security Score -->
+                    <div class="bg-white p-3 rounded-lg border">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-xs text-gray-600">Security</p>
+                                <p id="security-score" class="text-xl font-bold text-gray-900">--</p>
+                            </div>
+                            <div class="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                                <i class="fas fa-shield-alt text-green-600 text-sm"></i>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Developer Experience -->
+                    <div class="bg-white p-3 rounded-lg border">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-xs text-gray-600">Dev Experience</p>
+                                <p id="dx-score" class="text-xl font-bold text-gray-900">--</p>
+                            </div>
+                            <div class="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
+                                <i class="fas fa-code text-purple-600 text-sm"></i>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Trending Score -->
+                    <div class="bg-white p-3 rounded-lg border">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-xs text-gray-600">Trending</p>
+                                <p id="trending-score" class="text-xl font-bold text-gray-900">--</p>
+                            </div>
+                            <div class="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center">
+                                <i class="fas fa-trending-up text-orange-600 text-sm"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Recommendations -->
+                <div class="mb-4">
+                    <h3 class="text-base font-semibold text-gray-900 mb-2">💡 Recommendations</h3>
+                    <div id="recommendations-list" class="space-y-2">
+                        <!-- Recommendations will be populated by JavaScript -->
+                    </div>
+                </div>
+
+                <!-- New Metrics: Releases / PR / Issues / Hygiene -->
+                <div class="grid md:grid-cols-2 gap-3">
+                    <div class="bg-white p-3 rounded-lg border">
+                        <h4 class="text-sm font-semibold text-gray-900 mb-2">🚀 Releases</h4>
+                        <div id="releases-metrics" class="text-xs text-gray-700 space-y-1"></div>
+                    </div>
+                    <div class="bg-white p-3 rounded-lg border">
+                        <h4 class="text-sm font-semibold text-gray-900 mb-2">🔀 PR & 🐞 Issues</h4>
+                        <div id="flow-metrics" class="text-xs text-gray-700 space-y-1"></div>
+                    </div>
+                </div>
+                <div class="mt-3 bg-white p-3 rounded-lg border">
+                    <h4 class="text-sm font-semibold text-gray-900 mb-2">🧰 Project Hygiene</h4>
+                    <div id="hygiene-metrics" class="text-xs text-gray-700 space-y-1"></div>
+                </div>
+            </div>
+
+            <!-- Portia AI Code Analysis -->
+            <div id="portia-section" class="mt-8 glass-card rounded-2xl p-6 hidden feature-card">
+                <div class="flex items-center mb-6">
+                    <div class="w-12 h-12 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-lg flex items-center justify-center mr-4">
+                        <i class="fas fa-brain text-white text-2xl"></i>
+                    </div>
+                    <div>
+                        <h2 class="text-2xl font-bold text-gray-900">🧠 Portia AI Code Analysis</h2>
+                        <p class="text-gray-600">Advanced AI-powered code review and insights</p>
+                    </div>
+                </div>
+                
+                <div class="grid md:grid-cols-2 gap-6">
+                    <!-- Code Quality Analysis -->
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-900 mb-3">📊 Code Quality</h3>
+                        <div id="portia-quality-content" class="space-y-3">
+                            <!-- Portia quality content will be populated by JavaScript -->
+                        </div>
+                    </div>
+                    
+                    <!-- Code Review Suggestions -->
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-900 mb-3">💡 Code Review</h3>
+                        <div id="portia-review-content" class="space-y-3">
+                            <!-- Portia review content will be populated by JavaScript -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Security & Business Intelligence -->
+            <div class="grid md:grid-cols-2 gap-6 mt-8">
+                <!-- Security Analysis -->
+                <div id="security-section" class="glass-card rounded-2xl p-6 hidden feature-card">
+                    <div class="flex items-center mb-4">
+                        <div class="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center mr-3">
+                            <i class="fas fa-shield-alt text-red-600 text-xl"></i>
+                        </div>
+                        <div>
+                            <h3 class="text-xl font-bold text-gray-900">🔒 Security Analysis</h3>
+                            <p class="text-gray-600">Dependencies and vulnerabilities</p>
+                        </div>
+                    </div>
+                    <div id="security-content" class="space-y-3">
+                        <!-- Security content will be populated by JavaScript -->
+                    </div>
+                </div>
+                
+                <!-- Business Intelligence -->
+                <div id="business-section" class="glass-card rounded-2xl p-6 hidden feature-card">
+                    <div class="flex items-center mb-4">
+                        <div class="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center mr-3">
+                            <i class="fas fa-chart-line text-blue-600 text-xl"></i>
+                        </div>
+                        <div>
+                            <h3 class="text-xl font-bold text-gray-900">📈 Business Intelligence</h3>
+                            <p class="text-gray-600">Adoption and ROI analysis</p>
+                        </div>
+                    </div>
+                    <div id="business-content" class="space-y-3">
+                        <!-- Business content will be populated by JavaScript -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- AI Insights Section -->
+            <div id="ai-insights-section" class="mt-8 glass-card rounded-2xl p-6 hidden feature-card">
+                <div class="flex items-center mb-4">
+                    <div class="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mr-4">
+                        <i class="fas fa-robot text-purple-600 text-2xl"></i>
+                    </div>
+                    <div>
+                        <h2 class="text-2xl font-bold text-gray-900">🤖 AI Analysis</h2>
+                        <p class="text-gray-600">Powered by Google Gemini & Portia AI</p>
+                    </div>
+                </div>
+                
+                <div class="grid md:grid-cols-2 gap-6">
+                    <div>
+                        <div id="purpose-section" class="mb-4 hidden">
+                            <h3 class="text-lg font-semibold text-gray-900 mb-2">🎯 Purpose</h3>
+                            <p id="purpose-content" class="text-gray-700 bg-white p-3 rounded-lg border"></p>
+                        </div>
+                        
+                        <div id="features-section" class="mb-4 hidden">
+                            <h3 class="text-lg font-semibold text-gray-900 mb-2">⭐ Key Features</h3>
+                            <div class="bg-white p-3 rounded-lg border">
+                                <ul id="features-list" class="list-disc list-inside space-y-1">
+                                    <!-- Features will be populated by JavaScript -->
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <div id="tech-stack-section" class="mb-4 hidden">
+                            <h3 class="text-lg font-semibold text-gray-900 mb-2">🛠️ Tech Stack</h3>
+                            <div class="bg-white p-3 rounded-lg border">
+                                <!-- AI-Detected Tech Stack -->
+                                <div id="ai-tech-stack" class="mb-4">
+                                    <h4 class="text-sm font-semibold text-gray-700 mb-2">AI Analysis:</h4>
+                                    <div id="ai-tech-stack-details" class="space-y-2">
+                                        <!-- AI tech stack will be populated by JavaScript -->
+                                    </div>
+                                </div>
+                                
+                                <!-- GitHub Languages -->
+                                <div id="github-languages" class="mb-4">
+                                    <h4 class="text-sm font-semibold text-gray-700 mb-2">GitHub Languages:</h4>
+                                    <div id="languages-chart-container" class="flex justify-center mb-3">
+                                        <canvas id="languages-chart" width="200" height="200"></canvas>
+                                    </div>
+                                    <div id="languages-details" class="space-y-1">
+                                        <!-- Languages will be populated by JavaScript -->
+                                    </div>
+                                </div>
+                                
+                                <!-- Topics/Tags -->
+                                <div id="repo-topics" class="hidden">
+                                    <h4 class="text-sm font-semibold text-gray-700 mb-2">Topics:</h4>
+                                    <div id="topics-list" class="flex flex-wrap gap-1">
+                                        <!-- Topics will be populated by JavaScript -->
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div id="status-section" class="mb-4 hidden">
+                            <h3 class="text-lg font-semibold text-gray-900 mb-2">📊 Project Status</h3>
+                            <div class="bg-white p-3 rounded-lg border">
+                                <span id="project-status" class="font-medium"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Error State -->
+        <div id="error-state" class="hidden">
+            <div id="error-container" class="border rounded-lg p-6">
+                <div class="flex items-center mb-3">
+                    <i id="error-icon" class="fas fa-info-circle mr-2"></i>
+                    <span id="error-title" class="font-semibold"></span>
+                </div>
+                <p id="error-url" class="mb-3"></p>
+                <p id="error-message" class="text-sm mb-2"></p>
+                <div id="error-details" class="text-xs mt-3 hidden">
+                    <strong>Details:</strong>
+                    <ul id="error-list" class="list-disc list-inside mt-1"></ul>
+                </div>
+                
+                <!-- Show scraped content even if API failed -->
+                <div id="fallback-readme" class="mt-4 p-3 bg-white rounded border hidden">
+                    <h4 class="text-sm font-semibold text-gray-700 mb-2">📖 README Content (Web Scraped)</h4>
+                    <div id="fallback-readme-content" class="text-xs text-gray-600 max-h-32 overflow-y-auto">
+                        <!-- Content will be populated by JavaScript -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Add utility functions directly to this page
+function validateGitHubUrl(input) {
+    const value = input.value.trim();
+    
+    if (!value) {
+        return false;
+    }
+    
+    // GitHub URL pattern
+    const githubPattern = /^https?:\/\/(www\.)?github\.com\/[\w\-\.]+\/[\w\-\.]+\/?$/;
+    
+    return githubPattern.test(value);
+}
+
+// Ensure Chart.js is available before attempting to render charts
+let chartJsLoadingPromise = null;
+function ensureChartJs() {
+    if (window.Chart) return Promise.resolve();
+    if (chartJsLoadingPromise) return chartJsLoadingPromise;
+    chartJsLoadingPromise = new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/chart.js';
+        script.async = true;
+        script.onload = () => resolve();
+        script.onerror = () => reject(new Error('Failed to load Chart.js'));
+        document.head.appendChild(script);
+    });
+    return chartJsLoadingPromise;
+}
+
+function formatNumber(num) {
+    if (num >= 1000000) {
+        return (num / 1000000).toFixed(1) + 'M';
+    } else if (num >= 1000) {
+        return (num / 1000).toFixed(1) + 'K';
+    }
+    return num.toString();
+}
+
+function sanitizeRepositoryUrl(rawUrl) {
+    try {
+        const parsed = new URL(rawUrl);
+        // Remove credentials if present
+        parsed.username = '';
+        parsed.password = '';
+        // Drop all query params to avoid leaking tokens/keys
+        parsed.search = '';
+        // Normalize path: remove trailing slash and .git
+        const cleanPath = parsed.pathname.replace(/\.git$/, '').replace(/\/$/, '');
+        return `${parsed.origin}${cleanPath}`;
+    } catch (e) {
+        // Fallback: strip common sensitive params from raw string
+        return rawUrl
+            .replace(/([?&])(token|access_token|api_key|apikey|key|auth|authorization|github_token|github_api_key)=[^&#]*/gi, '$1')
+            .replace(/[?&]$/, '');
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Check if we have a URL parameter and should start analysis
+    const urlParams = new URLSearchParams(window.location.search);
+    const repoUrl = urlParams.get('q');
+    
+    if (repoUrl) {
+        // Update the input field
+        const input = document.getElementById('repo-url-input');
+        if (input) {
+            const sanitized = sanitizeRepositoryUrl(repoUrl);
+            input.value = sanitized;
+            updateRepoUrlDisplay(sanitized);
+        }
+        
+        // Start analysis automatically
+        analyzeRepository(sanitizeRepositoryUrl(repoUrl));
+    }
+    
+    // Set up form submission handler
+    const form = document.getElementById('analysis-form');
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const input = document.getElementById('repo-url-input');
+            const url = sanitizeRepositoryUrl(input.value.trim());
+            
+            if (url && validateGitHubUrl(input)) {
+                // Update URL without page reload
+                const newUrl = new URL(window.location);
+                newUrl.searchParams.set('q', url);
+                history.pushState(null, '', newUrl);
+                
+                // Update display
+                updateRepoUrlDisplay(url);
+                
+                // Start analysis
+                analyzeRepository(url);
+            }
+        });
+    }
+
+    // Demo preset buttons
+    document.querySelectorAll('.demo-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const url = btn.getAttribute('data-url');
+            const input = document.getElementById('repo-url-input');
+            input.value = url;
+            const newUrl = new URL(window.location);
+            newUrl.searchParams.set('q', url);
+            history.pushState(null, '', newUrl);
+            updateRepoUrlDisplay(url);
+            analyzeRepository(url);
+        });
+    });
+});
+
+function updateRepoUrlDisplay(url) {
+    const display = document.getElementById('repo-url-display');
+    if (display) {
+        display.innerHTML = `Results for: <span class="font-mono text-blue-600">${url}</span>`;
+    }
+}
+
+async function analyzeRepository(url) {
+    // Show loading state
+    showLoadingState();
+    hideErrorState();
+    hideResults();
+    
+    try {
+        // Make API request
+        const response = await fetch(`/api/analyze?url=${encodeURIComponent(url)}`);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        
+        // Update loading steps
+        updateLoadingStep('scraping');
+        await new Promise(resolve => setTimeout(resolve, 500)); // Brief delay for UX
+        
+        updateLoadingStep('ai');
+        await new Promise(resolve => setTimeout(resolve, 500)); // Brief delay for UX
+        
+        // Hide loading and show results
+        hideLoadingState();
+        displayResults(data);
+        
+    } catch (error) {
+        console.error('Analysis error:', error);
+        hideLoadingState();
+        showErrorState({
+            status: 'error',
+            error: error.message || 'Unknown error occurred',
+            data: { basic_info: { note: 'Failed to analyze repository. Please try again.' } },
+            errors: [`Network error: ${error.message || 'Connection failed'}`]
+        }, url);
+    }
+}
+
+function showLoadingState() {
+    document.getElementById('loading-state').classList.remove('hidden');
+    
+    // Reset loading steps
+    resetLoadingSteps();
+}
+
+function hideLoadingState() {
+    document.getElementById('loading-state').classList.add('hidden');
+}
+
+function resetLoadingSteps() {
+    const steps = ['step-github', 'step-scraping', 'step-ai'];
+    steps.forEach(stepId => {
+        const step = document.getElementById(stepId);
+        step.className = 'flex items-center text-gray-400';
+        step.innerHTML = '<i class="fas fa-circle mr-2"></i>' + step.textContent.replace(/^[^A-Z]*/, '');
+    });
+    
+    // Activate first step
+    const firstStep = document.getElementById('step-github');
+    firstStep.className = 'flex items-center';
+    firstStep.innerHTML = '<i class="fas fa-spinner fa-spin text-blue-500 mr-2"></i>GitHub API';
+}
+
+function updateLoadingStep(step) {
+    const stepMap = {
+        'scraping': 'step-scraping',
+        'ai': 'step-ai'
+    };
+    
+    if (step === 'scraping') {
+        // Complete GitHub step
+        const githubStep = document.getElementById('step-github');
+        githubStep.className = 'flex items-center text-green-600';
+        githubStep.innerHTML = '<i class="fas fa-check mr-2"></i>GitHub API';
+        
+        // Start scraping step
+        const scrapingStep = document.getElementById('step-scraping');
+        scrapingStep.className = 'flex items-center';
+        scrapingStep.innerHTML = '<i class="fas fa-spinner fa-spin text-blue-500 mr-2"></i>Web Scraping';
+    } else if (step === 'ai') {
+        // Complete scraping step
+        const scrapingStep = document.getElementById('step-scraping');
+        scrapingStep.className = 'flex items-center text-green-600';
+        scrapingStep.innerHTML = '<i class="fas fa-check mr-2"></i>Web Scraping';
+        
+        // Start AI step
+        const aiStep = document.getElementById('step-ai');
+        aiStep.className = 'flex items-center';
+        aiStep.innerHTML = '<i class="fas fa-spinner fa-spin text-purple-500 mr-2"></i>AI Analysis';
+    }
+}
+
+function hideErrorState() {
+    document.getElementById('error-state').classList.add('hidden');
+}
+
+function hideResults() {
+    document.getElementById('analysis-results').classList.add('hidden');
+}
+
+function displayResults(data) {
+    // Show cache indicator if applicable
+    if (data.cached) {
+        document.getElementById('cache-indicator').classList.remove('hidden');
+    } else {
+        document.getElementById('cache-indicator').classList.add('hidden');
+    }
+    
+    // Update Portia status badge
+    try {
+        const portiaData = (data?.data?.portia_analysis) || {};
+        const portiaBadge = document.getElementById('portia-status');
+        const portiaPill = document.getElementById('portia-status-pill');
+        const portiaDot = document.getElementById('portia-status-dot');
+        const portiaText = document.getElementById('portia-status-text');
+        if (portiaBadge && portiaPill && portiaDot && portiaText) {
+            portiaBadge.classList.remove('hidden');
+            if (portiaData.analysis_status === 'success') {
+                portiaPill.className = 'inline-flex items-center px-3 py-1 rounded-full border border-green-200 bg-green-50 text-green-800 text-sm';
+                portiaDot.className = 'w-2 h-2 rounded-full mr-2 bg-green-500';
+                portiaText.textContent = 'Portia: Active';
+            } else {
+                portiaPill.className = 'inline-flex items-center px-3 py-1 rounded-full border border-gray-200 bg-gray-50 text-gray-700 text-sm';
+                portiaDot.className = 'w-2 h-2 rounded-full mr-2 bg-gray-400';
+                portiaText.textContent = 'Portia: Inactive';
+            }
+        }
+    } catch (e) { /* no-op */ }
+
+    if (data.status === 'success') {
+        populateRepositoryData(data);
+        document.getElementById('analysis-results').classList.remove('hidden');
+    } else {
+        showErrorState(data, data.url);
+    }
+}
+
+function populateRepositoryData(data) {
+    console.log('Full analysis data:', data);
+    const repoData = data.data || {};
+    console.log('Repository data:', repoData);
+    
+    // Populate repository details
+    try {
+        populateRepoDetails(repoData.basic_info || {});
+    } catch (e) {
+        console.warn('Error populating repo details:', e);
+    }
+    
+    // Populate repository stats
+    try {
+        populateRepoStats(repoData.activity_metrics || {});
+    } catch (e) {
+        console.warn('Error populating repo stats:', e);
+    }
+    
+    // Populate README content
+    try {
+        if (repoData.scraped_content && repoData.scraped_content.readme_content) {
+            populateReadmeContent(repoData.scraped_content);
+        }
+    } catch (e) {
+        console.warn('Error populating README content:', e);
+    }
+    
+    // Populate AI insights
+    try {
+        if (repoData.ai_insights && repoData.ai_insights.analysis_status === 'success') {
+            populateAIInsights(repoData.ai_insights);
+        }
+    } catch (e) {
+        console.warn('Error populating AI insights:', e);
+    }
+    
+    // Populate GitHub languages and topics
+    try {
+        populateGitHubLanguages(repoData.code_quality || {});
+    } catch (e) {
+        console.warn('Error populating GitHub languages:', e);
+    }
+    
+    // Populate enhanced analysis sections (with error handling)
+    try {
+        console.log('Populating health dashboard with data:', repoData);
+        populateHealthDashboard(repoData);
+    } catch (e) {
+        console.warn('Error populating health dashboard:', e);
+    }
+    
+    try {
+        populateSecurityAnalysis(repoData?.security_analysis || {});
+    } catch (e) {
+        console.warn('Error populating security analysis:', e);
+    }
+    
+    try {
+        populateBusinessIntelligence(repoData?.business_intelligence || {});
+    } catch (e) {
+        console.warn('Error populating business intelligence:', e);
+    }
+    
+    try {
+        populatePortiaAnalysis(repoData?.portia_analysis || {}, repoData?.portia_code_review || {});
+    } catch (e) {
+        console.warn('Error populating Portia analysis:', e);
+    }
+
+    // Populate new metrics
+    try {
+        const relDiv = document.getElementById('releases-metrics');
+        const flowDiv = document.getElementById('flow-metrics');
+        const hygDiv = document.getElementById('hygiene-metrics');
+        if (relDiv && repoData.releases) {
+            const r = repoData.releases;
+            relDiv.innerHTML = `
+                <div>Total releases: <strong>${r.count ?? 0}</strong></div>
+                <div>Last 90 days: <strong>${r.last_90_days ?? 0}</strong></div>
+                <div>Last 365 days: <strong>${r.last_365_days ?? 0}</strong></div>
+                <div>Latest release age: <strong>${r.latest_age_days ?? '—'} days</strong></div>
+            `;
+        }
+        if (flowDiv) {
+            const pr = repoData.pr_flow || {};
+            const is = repoData.activity_metrics?.issue_metrics || repoData.issue_metrics || {};
+            const avgResp = is.avg_response_time_days ?? '—';
+            const medMerge = pr.median_merge_time_days ?? '—';
+            const medClose = is.median_close_time_days ?? '—';
+            flowDiv.innerHTML = `
+                <div>PR median merge time: <strong>${medMerge} days</strong></div>
+                <div>Issue avg first response: <strong>${avgResp} days</strong></div>
+                <div>Issue median close time: <strong>${medClose} days</strong></div>
+            `;
+        }
+        if (hygDiv && repoData.hygiene) {
+            const h = repoData.hygiene;
+            hygDiv.innerHTML = `
+                <div>CI Workflows: ${h.ci_workflows && h.ci_workflows.length ? h.ci_workflows.map(n=>`<span class='badge-soft mr-1'>${n}</span>`).join('') : 'None'}</div>
+                <div>CONTRIBUTING: <strong>${h.has_contributing ? 'Yes' : 'No'}</strong></div>
+                <div>CODE OF CONDUCT: <strong>${h.has_code_of_conduct ? 'Yes' : 'No'}</strong></div>
+                <div>SECURITY policy: <strong>${h.has_security ? 'Yes' : 'No'}</strong></div>
+                <div>LICENSE: <strong>${h.has_license ? 'Yes' : 'No'}</strong></div>
+            `;
+        }
+    } catch (e) {
+        console.warn('Error populating new metrics:', e);
+    }
+}
+
+function populateHealthDashboard(repoData) {
+    const dashboard = document.getElementById('health-dashboard');
+    if (!dashboard) return;
+    
+    console.log('Health dashboard input data:', repoData);
+    
+    // Calculate scores based on actual repository data
+    const activityMetrics = repoData?.activity_metrics || {};
+    const communityHealth = repoData?.community_health || {};
+    const codeQuality = repoData?.code_quality || {};
+    
+    console.log('Activity metrics:', activityMetrics);
+    console.log('Community health:', communityHealth);
+    console.log('Code quality:', codeQuality);
+    
+    // Debug: Check if data exists
+    if (!repoData || Object.keys(repoData).length === 0) {
+        console.error('No repository data provided to health dashboard');
+        return;
+    }
+    
+    // Quality Score (based on README, topics, languages, etc.)
+    let qualityScore = 0;
+    console.log('Calculating quality score...');
+    if (codeQuality.has_readme) {
+        qualityScore += 20;
+        console.log('+20 for README');
+    }
+    if (codeQuality.topics && codeQuality.topics.length > 0) {
+        qualityScore += 15;
+        console.log(`+15 for topics (${codeQuality.topics.length} topics)`);
+    }
+    if (codeQuality.languages && Object.keys(codeQuality.languages).length > 0) {
+        qualityScore += 15;
+        console.log(`+15 for languages (${Object.keys(codeQuality.languages).length} languages)`);
+    }
+    if (repoData?.scraped_content?.readme_content) {
+        qualityScore += 20;
+        console.log('+20 for scraped README content');
+    }
+    if (activityMetrics.stars > 0) {
+        qualityScore += 10;
+        console.log(`+10 for stars (${activityMetrics.stars})`);
+    }
+    if (activityMetrics.forks > 0) {
+        qualityScore += 10;
+        console.log(`+10 for forks (${activityMetrics.forks})`);
+    }
+    if (activityMetrics.contributors_count > 1) {
+        qualityScore += 10;
+        console.log(`+10 for contributors (${activityMetrics.contributors_count})`);
+    }
+    
+    // Security Score (based on license, issues enabled, etc.)
+    let securityScore = 0;
+    console.log('Calculating security score...');
+    if (communityHealth.license) {
+        securityScore += 30;
+        console.log(`+30 for license (${communityHealth.license})`);
+    }
+    if (communityHealth.has_issues) {
+        securityScore += 25;
+        console.log('+25 for issues enabled');
+    }
+    if (!communityHealth.archived) {
+        securityScore += 20;
+        console.log('+20 for not archived');
+    }
+    if (communityHealth.has_wiki) {
+        securityScore += 15;
+        console.log('+15 for wiki enabled');
+    }
+    if (communityHealth.has_pages) {
+        securityScore += 10;
+        console.log('+10 for pages enabled');
+    }
+    
+    // Developer Experience Score
+    let dxScore = 0;
+    console.log('Calculating DX score...');
+    if (codeQuality.has_readme) {
+        dxScore += 25;
+        console.log('+25 for README');
+    }
+    if (communityHealth.has_issues) {
+        dxScore += 25;
+        console.log('+25 for issues enabled');
+    }
+    if (communityHealth.has_wiki) {
+        dxScore += 20;
+        console.log('+20 for wiki enabled');
+    }
+    if (activityMetrics.last_commit_date) {
+        dxScore += 15;
+        console.log(`+15 for recent commits (${activityMetrics.last_commit_date})`);
+    }
+    if (activityMetrics.contributors_count > 1) {
+        dxScore += 15;
+        console.log(`+15 for multiple contributors (${activityMetrics.contributors_count})`);
+    }
+    
+    // Trending Score (based on recent activity)
+    let trendingScore = 0;
+    console.log('Calculating trending score...');
+    if (activityMetrics.stars > 10) {
+        trendingScore += 25;
+        console.log(`+25 for high stars (${activityMetrics.stars})`);
+    }
+    if (activityMetrics.forks > 5) {
+        trendingScore += 25;
+        console.log(`+25 for high forks (${activityMetrics.forks})`);
+    }
+    if (activityMetrics.watchers > 5) {
+        trendingScore += 20;
+        console.log(`+20 for high watchers (${activityMetrics.watchers})`);
+    }
+    if (activityMetrics.open_issues > 0) {
+        trendingScore += 15;
+        console.log(`+15 for open issues (${activityMetrics.open_issues})`);
+    }
+    if (activityMetrics.last_commit_date) {
+        const lastCommit = new Date(activityMetrics.last_commit_date);
+        const daysSince = (new Date() - lastCommit) / (1000 * 60 * 60 * 24);
+        if (daysSince < 30) {
+            trendingScore += 15; // Recent activity
+            console.log(`+15 for recent activity (${Math.round(daysSince)} days ago)`);
+        }
+    }
+    
+    const overallHealth = Math.round((qualityScore + securityScore + dxScore + trendingScore) / 4);
+    
+    console.log('Calculated scores:', {
+        qualityScore,
+        securityScore,
+        dxScore,
+        trendingScore,
+        overallHealth
+    });
+    
+    // Update overall health score
+    const healthNumber = document.getElementById('health-score-number');
+    const healthLabel = document.getElementById('health-score-label');
+    const healthDescription = document.getElementById('health-score-description');
+    
+    if (healthNumber) {
+        healthNumber.textContent = '0';
+        healthNumber.setAttribute('data-target', overallHealth);
+        healthNumber.classList.add('counter');
+    }
+    
+    // Set health label and color
+    let label, description, colorClass;
+    if (overallHealth >= 80) {
+        label = "Excellent Health";
+        description = "This repository is in great shape!";
+        colorClass = "text-green-600";
+    } else if (overallHealth >= 60) {
+        label = "Good Health";
+        description = "This repository is doing well with room for improvement.";
+        colorClass = "text-blue-600";
+    } else if (overallHealth >= 40) {
+        label = "Fair Health";
+        description = "This repository needs some attention.";
+        colorClass = "text-yellow-600";
+    } else {
+        label = "Poor Health";
+        description = "This repository needs significant improvements.";
+        colorClass = "text-red-600";
+    }
+    
+    if (healthLabel) {
+        healthLabel.textContent = label;
+        healthLabel.className = `text-lg font-semibold mb-2 ${colorClass}`;
+    }
+    if (healthDescription) healthDescription.textContent = description;
+    
+    // Update individual scores
+    const qualityScoreEl = document.getElementById('quality-score');
+    const securityScoreEl = document.getElementById('security-score');
+    const dxScoreEl = document.getElementById('dx-score');
+    const trendingScoreEl = document.getElementById('trending-score');
+    
+    if (qualityScoreEl) {
+        qualityScoreEl.textContent = '0';
+        qualityScoreEl.setAttribute('data-target', qualityScore);
+        qualityScoreEl.classList.add('counter');
+    }
+    if (securityScoreEl) {
+        securityScoreEl.textContent = '0';
+        securityScoreEl.setAttribute('data-target', securityScore);
+        securityScoreEl.classList.add('counter');
+    }
+    if (dxScoreEl) {
+        dxScoreEl.textContent = '0';
+        dxScoreEl.setAttribute('data-target', dxScore);
+        dxScoreEl.classList.add('counter');
+    }
+    if (trendingScoreEl) {
+        trendingScoreEl.textContent = '0';
+        trendingScoreEl.setAttribute('data-target', trendingScore);
+        trendingScoreEl.classList.add('counter');
+    }
+    
+    // Populate recommendations
+    const recommendationsList = document.getElementById('recommendations-list');
+    if (recommendationsList) {
+        recommendationsList.innerHTML = '';
+        const recommendations = [];
+        
+        // Generate recommendations based on actual data
+        if (!communityHealth.has_issues) {
+            recommendations.push('Enable issues for better community engagement (+25 points)');
+        }
+        if (!communityHealth.license) {
+            recommendations.push('Add a license file for better security and legal clarity (+30 points)');
+        }
+        if (!codeQuality.has_readme) {
+            recommendations.push('Add a README file to improve documentation (+20 points)');
+        }
+        if (activityMetrics.stars === 0) {
+            recommendations.push('Promote your repository to get more stars (+10 points)');
+        }
+        if (activityMetrics.forks === 0) {
+            recommendations.push('Encourage contributions through forks (+10 points)');
+        }
+        if (!communityHealth.has_wiki) {
+            recommendations.push('Enable wiki for better documentation (+20 points)');
+        }
+        if (communityHealth.archived) {
+            recommendations.push('Consider unarchiving the repository if it\'s still active (+20 points)');
+        }
+        
+        recommendations.forEach(rec => {
+            const div = document.createElement('div');
+            div.className = 'flex items-start space-x-2 p-2 bg-yellow-50 rounded-lg border-l-4 border-yellow-400';
+            div.innerHTML = `
+                <i class="fas fa-lightbulb text-yellow-600 mt-0.5 text-sm"></i>
+                <span class="text-xs text-gray-700">${rec}</span>
+            `;
+            recommendationsList.appendChild(div);
+        });
+    }
+    
+    dashboard.classList.remove('hidden');
+    
+    // Animate counters after a short delay
+    setTimeout(() => {
+        animateCounters();
+    }, 300);
+}
+
+function populateSecurityAnalysis(securityData) {
+    const securitySection = document.getElementById('security-section');
+    const securityContent = document.getElementById('security-content');
+    
+    if (!securitySection || !securityContent || !securityData) return;
+    
+    // Ensure securityData has required properties
+    securityData = securityData || {};
+    securityData.security_score = securityData.security_score || 0;
+    securityData.license_compliance = securityData.license_compliance || 'unknown';
+    securityData.dependencies = securityData.dependencies || {};
+    securityData.outdated_deps = securityData.outdated_deps || [];
+    
+    securityContent.innerHTML = '';
+    
+    // Security Score
+    const scoreDiv = document.createElement('div');
+    scoreDiv.className = 'flex items-center justify-between p-3 bg-gray-50 rounded-lg';
+    scoreDiv.innerHTML = `
+        <span class="text-gray-700">Security Score:</span>
+        <span class="font-bold ${securityData.security_score >= 80 ? 'text-green-600' : securityData.security_score >= 60 ? 'text-yellow-600' : 'text-red-600'}">
+            ${securityData.security_score}/100
+        </span>
+    `;
+    securityContent.appendChild(scoreDiv);
+    
+    // License Compliance
+    const licenseDiv = document.createElement('div');
+    licenseDiv.className = 'flex items-center justify-between p-3 bg-gray-50 rounded-lg';
+    licenseDiv.innerHTML = `
+        <span class="text-gray-700">License:</span>
+        <span class="font-bold ${securityData.license_compliance === 'compliant' ? 'text-green-600' : 'text-red-600'}">
+            ${securityData.license_compliance === 'compliant' ? '✓ Compliant' : '✗ Missing'}
+        </span>
+    `;
+    securityContent.appendChild(licenseDiv);
+    
+    // Dependencies
+    if (securityData.dependencies?.files_found) {
+        const depsDiv = document.createElement('div');
+        depsDiv.className = 'p-3 bg-gray-50 rounded-lg';
+        depsDiv.innerHTML = `
+            <div class="text-sm font-semibold text-gray-700 mb-2">Dependency Files:</div>
+            <div class="flex flex-wrap gap-1">
+                ${securityData.dependencies.files_found.map(file => 
+                    `<span class="badge-soft text-xs">${file}</span>`
+                ).join('')}
+            </div>
+        `;
+        securityContent.appendChild(depsDiv);
+    }
+    
+    // Outdated Dependencies
+    if (securityData.outdated_deps && securityData.outdated_deps.length > 0) {
+        const outdatedDiv = document.createElement('div');
+        outdatedDiv.className = 'p-3 bg-red-50 rounded-lg border-l-4 border-red-400';
+        outdatedDiv.innerHTML = `
+            <div class="text-sm font-semibold text-red-800 mb-2">⚠️ Outdated Dependencies:</div>
+            ${securityData.outdated_deps.map(dep => `
+                <div class="text-xs text-red-700 mb-1">
+                    <strong>${dep.package}</strong>: ${dep.current} → ${dep.latest} (${dep.severity})
+                </div>
+            `).join('')}
+        `;
+        securityContent.appendChild(outdatedDiv);
+    }
+    
+    securitySection.classList.remove('hidden');
+}
+
+function populateBusinessIntelligence(biData) {
+    const businessSection = document.getElementById('business-section');
+    const businessContent = document.getElementById('business-content');
+    
+    if (!businessSection || !businessContent || !biData) return;
+    
+    // Ensure biData has required properties
+    biData = biData || {};
+    biData.adoption_potential = biData.adoption_potential || 'unknown';
+    biData.maintenance_risk = biData.maintenance_risk || 'unknown';
+    biData.enterprise_readiness = biData.enterprise_readiness || 'unknown';
+    biData.market_position = biData.market_position || 'unknown';
+    biData.roi_analysis = biData.roi_analysis || {};
+    
+    businessContent.innerHTML = '';
+    
+    // Adoption Potential
+    const adoptionDiv = document.createElement('div');
+    adoptionDiv.className = 'flex items-center justify-between p-3 bg-gray-50 rounded-lg';
+    adoptionDiv.innerHTML = `
+        <span class="text-gray-700">Adoption Potential:</span>
+        <span class="font-bold text-blue-600">${biData.adoption_potential.replace('_', ' ').toUpperCase()}</span>
+    `;
+    businessContent.appendChild(adoptionDiv);
+    
+    // Maintenance Risk
+    const riskDiv = document.createElement('div');
+    riskDiv.className = 'flex items-center justify-between p-3 bg-gray-50 rounded-lg';
+    riskDiv.innerHTML = `
+        <span class="text-gray-700">Maintenance Risk:</span>
+        <span class="font-bold ${biData.maintenance_risk.includes('low') ? 'text-green-600' : biData.maintenance_risk.includes('high') ? 'text-red-600' : 'text-yellow-600'}">
+            ${biData.maintenance_risk.replace('_', ' ').toUpperCase()}
+        </span>
+    `;
+    businessContent.appendChild(riskDiv);
+    
+    // Enterprise Readiness
+    const enterpriseDiv = document.createElement('div');
+    enterpriseDiv.className = 'flex items-center justify-between p-3 bg-gray-50 rounded-lg';
+    enterpriseDiv.innerHTML = `
+        <span class="text-gray-700">Enterprise Ready:</span>
+        <span class="font-bold text-blue-600">${biData.enterprise_readiness.replace('_', ' ').toUpperCase()}</span>
+    `;
+    businessContent.appendChild(enterpriseDiv);
+    
+    // ROI Analysis
+    if (biData.roi_analysis) {
+        const roiDiv = document.createElement('div');
+        roiDiv.className = 'p-3 bg-green-50 rounded-lg border-l-4 border-green-400';
+        roiDiv.innerHTML = `
+            <div class="text-sm font-semibold text-green-800 mb-2">💰 ROI Analysis:</div>
+            <div class="text-xs text-green-700 space-y-1">
+                <div>Time saved: <strong>${biData.roi_analysis.time_saved_hours_per_week} hours/week</strong></div>
+                <div>Cost savings: <strong>$${biData.roi_analysis.cost_savings_per_month}/month</strong></div>
+                <div>Implementation: <strong>${biData.roi_analysis.implementation_time_days} days</strong></div>
+            </div>
+        `;
+        businessContent.appendChild(roiDiv);
+    }
+    
+    // Market Position
+    const marketDiv = document.createElement('div');
+    marketDiv.className = 'flex items-center justify-between p-3 bg-gray-50 rounded-lg';
+    marketDiv.innerHTML = `
+        <span class="text-gray-700">Market Position:</span>
+        <span class="font-bold text-blue-600">${biData.market_position.replace('_', ' ').toUpperCase()}</span>
+    `;
+    businessContent.appendChild(marketDiv);
+    
+    businessSection.classList.remove('hidden');
+}
+
+function populatePortiaAnalysis(portiaData, reviewData) {
+    const portiaSection = document.getElementById('portia-section');
+    const qualityContent = document.getElementById('portia-quality-content');
+    const reviewContent = document.getElementById('portia-review-content');
+    
+    if (!portiaSection || !qualityContent || !reviewContent) return;
+    
+    // Populate Code Quality Analysis
+    qualityContent.innerHTML = '';
+    
+    if (portiaData.analysis_status === 'success') {
+        // AI Score
+        const aiScoreDiv = document.createElement('div');
+        aiScoreDiv.className = 'flex items-center justify-between p-3 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-lg';
+        aiScoreDiv.innerHTML = `
+            <span class="text-gray-700 font-semibold">AI Assessment Score:</span>
+            <span class="text-2xl font-bold text-indigo-600 counter" data-target="${portiaData.ai_score}">0</span>/100
+        `;
+        qualityContent.appendChild(aiScoreDiv);
+        
+        // Code Quality Score
+        if (portiaData.code_quality?.score) {
+            const qualityScoreDiv = document.createElement('div');
+            qualityScoreDiv.className = 'flex items-center justify-between p-3 bg-gray-50 rounded-lg';
+            qualityScoreDiv.innerHTML = `
+                <span class="text-gray-700">Code Quality:</span>
+                <span class="font-bold counter ${portiaData.code_quality.score >= 80 ? 'text-green-600' : portiaData.code_quality.score >= 60 ? 'text-yellow-600' : 'text-red-600'}" data-target="${portiaData.code_quality.score}">
+                    0
+                </span>/100
+            `;
+            qualityContent.appendChild(qualityScoreDiv);
+        }
+        
+        // Complexity Analysis
+        if (portiaData.code_quality?.complexity) {
+            const complexityDiv = document.createElement('div');
+            complexityDiv.className = 'flex items-center justify-between p-3 bg-gray-50 rounded-lg';
+            complexityDiv.innerHTML = `
+                <span class="text-gray-700">Complexity Level:</span>
+                <span class="font-bold text-blue-600">${portiaData.code_quality.complexity.toUpperCase()}</span>
+            `;
+            qualityContent.appendChild(complexityDiv);
+        }
+        
+        // Security Insights
+        if (portiaData.security_insights && portiaData.security_insights.length > 0) {
+            const securityDiv = document.createElement('div');
+            securityDiv.className = 'p-3 bg-red-50 rounded-lg border-l-4 border-red-400';
+            securityDiv.innerHTML = `
+                <div class="text-sm font-semibold text-red-800 mb-2">🔒 Security Insights:</div>
+                <ul class="text-xs text-red-700 space-y-1">
+                    ${portiaData.security_insights.map(insight => `<li>• ${insight}</li>`).join('')}
+                </ul>
+            `;
+            qualityContent.appendChild(securityDiv);
+        }
+        
+        // Performance Suggestions
+        if (portiaData.performance_suggestions && portiaData.performance_suggestions.length > 0) {
+            const performanceDiv = document.createElement('div');
+            performanceDiv.className = 'p-3 bg-blue-50 rounded-lg border-l-4 border-blue-400';
+            performanceDiv.innerHTML = `
+                <div class="text-sm font-semibold text-blue-800 mb-2">⚡ Performance Suggestions:</div>
+                <ul class="text-xs text-blue-700 space-y-1">
+                    ${portiaData.performance_suggestions.map(suggestion => `<li>• ${suggestion}</li>`).join('')}
+                </ul>
+            `;
+            qualityContent.appendChild(performanceDiv);
+        }
+        
+        // Best Practices
+        if (portiaData.best_practices && portiaData.best_practices.length > 0) {
+            const practicesDiv = document.createElement('div');
+            practicesDiv.className = 'p-3 bg-green-50 rounded-lg border-l-4 border-green-400';
+            practicesDiv.innerHTML = `
+                <div class="text-sm font-semibold text-green-800 mb-2">✅ Best Practices:</div>
+                <ul class="text-xs text-green-700 space-y-1">
+                    ${portiaData.best_practices.map(practice => `<li>• ${practice}</li>`).join('')}
+                </ul>
+            `;
+            qualityContent.appendChild(practicesDiv);
+        }
+    } else {
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'p-3 bg-gray-50 rounded-lg text-center text-gray-600';
+        errorDiv.textContent = 'Portia AI analysis not available';
+        qualityContent.appendChild(errorDiv);
+    }
+    
+    // Populate Code Review
+    reviewContent.innerHTML = '';
+    
+    if (reviewData.review_status === 'success') {
+        // Review Score
+        const reviewScoreDiv = document.createElement('div');
+        reviewScoreDiv.className = 'flex items-center justify-between p-3 bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg';
+        reviewScoreDiv.innerHTML = `
+            <span class="text-gray-700 font-semibold">Code Review Score:</span>
+            <span class="text-2xl font-bold text-purple-600 counter" data-target="${reviewData.review_score}">0</span>/100
+        `;
+        reviewContent.appendChild(reviewScoreDiv);
+        
+        // Suggestions
+        if (reviewData.suggestions && reviewData.suggestions.length > 0) {
+            const suggestionsDiv = document.createElement('div');
+            suggestionsDiv.className = 'p-3 bg-yellow-50 rounded-lg border-l-4 border-yellow-400';
+            suggestionsDiv.innerHTML = `
+                <div class="text-sm font-semibold text-yellow-800 mb-2">💡 Suggestions:</div>
+                <ul class="text-xs text-yellow-700 space-y-1">
+                    ${reviewData.suggestions.map(suggestion => `<li>• ${suggestion}</li>`).join('')}
+                </ul>
+            `;
+            reviewContent.appendChild(suggestionsDiv);
+        }
+        
+        // Improvements
+        if (reviewData.improvements && reviewData.improvements.length > 0) {
+            const improvementsDiv = document.createElement('div');
+            improvementsDiv.className = 'p-3 bg-blue-50 rounded-lg border-l-4 border-blue-400';
+            improvementsDiv.innerHTML = `
+                <div class="text-sm font-semibold text-blue-800 mb-2">🔧 Improvements:</div>
+                <ul class="text-xs text-blue-700 space-y-1">
+                    ${reviewData.improvements.map(improvement => `<li>• ${improvement}</li>`).join('')}
+                </ul>
+            `;
+            reviewContent.appendChild(improvementsDiv);
+        }
+        
+        // Code Patterns
+        if (reviewData.code_patterns && reviewData.code_patterns.length > 0) {
+            const patternsDiv = document.createElement('div');
+            patternsDiv.className = 'p-3 bg-green-50 rounded-lg border-l-4 border-green-400';
+            patternsDiv.innerHTML = `
+                <div class="text-sm font-semibold text-green-800 mb-2">📋 Code Patterns:</div>
+                <ul class="text-xs text-green-700 space-y-1">
+                    ${reviewData.code_patterns.map(pattern => `<li>• ${pattern}</li>`).join('')}
+                </ul>
+            `;
+            reviewContent.appendChild(patternsDiv);
+        }
+    } else {
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'p-3 bg-gray-50 rounded-lg text-center text-gray-600';
+        errorDiv.textContent = 'Code review not available';
+        reviewContent.appendChild(errorDiv);
+    }
+    
+    portiaSection.classList.remove('hidden');
+    
+    // Animate counters after a short delay
+    setTimeout(() => {
+        animateCounters();
+    }, 400);
+}
+
+function populateGitHubLanguages(codeQuality) {
+    // Languages chart
+    if (codeQuality.languages && Object.keys(codeQuality.languages).length > 0) {
+        const languagesChart = document.getElementById('languages-chart');
+        const languagesDetails = document.getElementById('languages-details');
+        
+        if (languagesChart && window.Chart) {
+            const ctx = languagesChart.getContext('2d');
+            const languages = Object.entries(codeQuality.languages);
+            const colors = ['#3B82F6', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444', '#6B7280', '#EC4899', '#14B8A6'];
+            
+            new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: languages.map(([lang, _]) => lang),
+                    datasets: [{
+                        data: languages.map(([_, bytes]) => bytes),
+                        backgroundColor: colors.slice(0, languages.length),
+                        borderWidth: 2,
+                        borderColor: '#ffffff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                padding: 10,
+                                font: { size: 11 }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Languages details
+        if (languagesDetails) {
+            languagesDetails.innerHTML = '';
+            const totalBytes = Object.values(codeQuality.languages).reduce((sum, bytes) => sum + bytes, 0);
+            
+            Object.entries(codeQuality.languages).forEach(([lang, bytes]) => {
+                const percentage = ((bytes / totalBytes) * 100).toFixed(1);
+                const div = document.createElement('div');
+                div.className = 'flex justify-between text-xs';
+                div.innerHTML = `
+                    <span class="text-gray-600">${lang}:</span>
+                    <span class="text-gray-900">${percentage}% (${formatBytes(bytes)})</span>
+                `;
+                languagesDetails.appendChild(div);
+            });
+        }
+    }
+    
+    // Topics
+    if (codeQuality.topics && codeQuality.topics.length > 0) {
+        const topicsList = document.getElementById('topics-list');
+        const repoTopics = document.getElementById('repo-topics');
+        
+        if (topicsList) {
+            topicsList.innerHTML = '';
+            codeQuality.topics.forEach(topic => {
+                const span = document.createElement('span');
+                span.className = 'badge-soft text-xs';
+                span.textContent = topic;
+                topicsList.appendChild(span);
+            });
+        }
+        
+        if (repoTopics) {
+            repoTopics.classList.remove('hidden');
+        }
+    }
+}
+
+function formatBytes(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+function populateRepoDetails(basicInfo) {
+    const container = document.getElementById('repo-details-content');
+    container.innerHTML = '';
+    
+    const fields = [
+        { key: 'name', label: 'Name', className: 'font-mono' },
+        { key: 'owner', label: 'Owner' },
+        { key: 'language', label: 'Language' },
+        { key: 'created_at', label: 'Created', format: (val) => val?.substring(0, 10) },
+        { key: 'updated_at', label: 'Last Updated', format: (val) => val?.substring(0, 10) }
+    ];
+    
+    fields.forEach(field => {
+        const value = basicInfo[field.key];
+        if (value) {
+            const div = document.createElement('div');
+            div.className = 'flex justify-between';
+            div.innerHTML = `
+                <span class="text-gray-600">${field.label}:</span>
+                <span class="text-gray-900 ${field.className || ''}">${field.format ? field.format(value) : value}</span>
+            `;
+            container.appendChild(div);
+        }
+    });
+    
+    // Add description if available
+    if (basicInfo.description) {
+        const descDiv = document.createElement('div');
+        descDiv.className = 'mt-3';
+        descDiv.innerHTML = `
+            <span class="text-gray-600">Description:</span>
+            <p class="text-gray-900 mt-1">${basicInfo.description}</p>
+        `;
+        container.appendChild(descDiv);
+    }
+}
+
+function populateRepoStats(activityMetrics) {
+    const container = document.getElementById('repo-stats-content');
+    container.innerHTML = '';
+    
+    const stats = [
+        { key: 'stars', label: '⭐ Stars', className: 'font-medium' },
+        { key: 'forks', label: '🍴 Forks' },
+        { key: 'watchers', label: '👀 Watchers' },
+        { key: 'contributors_count', label: '👥 Contributors' },
+        { key: 'open_issues', label: '🐛 Open Issues' }
+    ];
+    
+    stats.forEach(stat => {
+        const value = activityMetrics[stat.key];
+        if (value !== undefined && value !== null) {
+            const div = document.createElement('div');
+            div.className = 'flex justify-between';
+            div.innerHTML = `
+                <span class="text-gray-600">${stat.label}:</span>
+                <span class="text-gray-900 ${stat.className || ''} counter" data-target="${value}">0</span>
+            `;
+            container.appendChild(div);
+        }
+    });
+    
+    // Animate counters after a short delay
+    setTimeout(() => {
+        animateCounters();
+    }, 500);
+}
+
+function populateReadmeContent(scrapedContent) {
+    if (scrapedContent.readme_content) {
+        const section = document.getElementById('readme-section');
+        const content = document.getElementById('readme-content');
+        const meta = document.getElementById('readme-meta');
+        const viewButton = document.getElementById('view-full-readme');
+        
+        content.innerHTML = `<pre class="whitespace-pre-wrap">${scrapedContent.readme_content}</pre>`;
+        
+        if (scrapedContent.readme_length) {
+            meta.textContent = `Content length: ${scrapedContent.readme_length} characters`;
+        }
+        
+        // Set up view full README button
+        if (viewButton) {
+            viewButton.addEventListener('click', function() {
+                const url = document.getElementById('repo-url-input').value;
+                const fullReadmeUrl = `${url}/blob/main/README.md`;
+                window.open(fullReadmeUrl, '_blank');
+            });
+        }
+        
+        section.classList.remove('hidden');
+    }
+}
+
+async function populateAIInsights(aiInsights) {
+    const section = document.getElementById('ai-insights-section');
+    
+    // Purpose
+    if (aiInsights.purpose) {
+        const purposeSection = document.getElementById('purpose-section');
+        const purposeContent = document.getElementById('purpose-content');
+        purposeContent.textContent = aiInsights.purpose;
+        purposeSection.classList.remove('hidden');
+    }
+    
+    // Features
+    if (aiInsights.features && aiInsights.features.length > 0) {
+        const featuresSection = document.getElementById('features-section');
+        const featuresList = document.getElementById('features-list');
+        
+        featuresList.innerHTML = '';
+        aiInsights.features.forEach(feature => {
+            const li = document.createElement('li');
+            li.className = 'text-gray-700 text-sm';
+            li.textContent = feature;
+            featuresList.appendChild(li);
+        });
+        
+        featuresSection.classList.remove('hidden');
+    }
+    
+    // README Summary
+    if (aiInsights.readme_summary) {
+        const readmeSummary = document.getElementById('readme-summary');
+        const readmeSummaryContent = document.getElementById('readme-summary-content');
+        readmeSummaryContent.textContent = aiInsights.readme_summary;
+        readmeSummary.classList.remove('hidden');
+    }
+    
+    // Tech Stack
+    if (aiInsights.tech_stack && Object.keys(aiInsights.tech_stack).length > 0) {
+        const techStackSection = document.getElementById('tech-stack-section');
+        
+        // Populate AI tech stack details
+        const aiTechStackDetails = document.getElementById('ai-tech-stack-details');
+        aiTechStackDetails.innerHTML = '';
+        
+        Object.entries(aiInsights.tech_stack).forEach(([category, technologies]) => {
+            const div = document.createElement('div');
+            div.className = 'flex justify-between';
+            div.innerHTML = `
+                <span class="text-gray-600 font-medium">${category}:</span>
+                <span class="text-gray-900 text-sm">${technologies}</span>
+            `;
+            aiTechStackDetails.appendChild(div);
+        });
+        
+        techStackSection.classList.remove('hidden');
+    }
+    
+    // Status
+    if (aiInsights.status) {
+        const statusSection = document.getElementById('status-section');
+        const projectStatus = document.getElementById('project-status');
+        
+        const statusClasses = {
+            'Active': 'text-green-600',
+            'Archived': 'text-yellow-600',
+            'Mature': 'text-blue-600',
+            'Experimental': 'text-purple-600',
+            'Inactive': 'text-gray-600'
+        };
+        
+        projectStatus.className = `font-medium ${statusClasses[aiInsights.status] || 'text-gray-600'}`;
+        projectStatus.textContent = aiInsights.status;
+        statusSection.classList.remove('hidden');
+    }
+    
+    section.classList.remove('hidden');
+}
+
+function createTechStackChart(techStack) {
+    const canvas = document.getElementById('tech-stack-chart');
+    if (!canvas || !window.Chart) return;
+    const ctx = canvas.getContext('2d');
+    
+    const categories = Object.keys(techStack);
+    const colors = [
+        '#3B82F6', '#8B5CF6', '#10B981', '#F59E0B', 
+        '#EF4444', '#6B7280', '#EC4899', '#14B8A6'
+    ];
+    
+    new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: categories,
+            datasets: [{
+                data: categories.map(() => 1), // Equal segments for each category
+                backgroundColor: colors.slice(0, categories.length),
+                borderWidth: 2,
+                borderColor: '#ffffff'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        padding: 15,
+                        font: {
+                            size: 12
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+function showErrorState(data, url) {
+    const errorState = document.getElementById('error-state');
+    const errorContainer = document.getElementById('error-container');
+    const errorIcon = document.getElementById('error-icon');
+    const errorTitle = document.getElementById('error-title');
+    const errorUrl = document.getElementById('error-url');
+    const errorMessage = document.getElementById('error-message');
+    const errorDetails = document.getElementById('error-details');
+    const errorList = document.getElementById('error-list');
+    
+    // Set status-specific styling
+    let statusClass = 'bg-blue-50 border-blue-200 text-blue-800';
+    let iconClass = 'text-blue-600';
+    let statusText = 'Analysis Status';
+    
+    if (data.status === 'rate_limited') {
+        statusClass = 'bg-yellow-50 border-yellow-200 text-yellow-800';
+        iconClass = 'text-yellow-600';
+        statusText = 'Rate Limited';
+    } else if (data.status === 'not_found') {
+        statusClass = 'bg-red-50 border-red-200 text-red-800';
+        iconClass = 'text-red-600';
+        statusText = 'Repository Not Found';
+    } else if (data.status === 'invalid_url') {
+        statusClass = 'bg-red-50 border-red-200 text-red-800';
+        iconClass = 'text-red-600';
+        statusText = 'Invalid URL';
+    } else if (data.status === 'error') {
+        statusClass = 'bg-red-50 border-red-200 text-red-800';
+        iconClass = 'text-red-600';
+        statusText = 'Analysis Error';
+    }
+    
+    errorContainer.className = `${statusClass} border rounded-lg p-6`;
+    errorIcon.className = `fas fa-info-circle ${iconClass} mr-2`;
+    errorTitle.textContent = statusText;
+    errorUrl.innerHTML = `Repository URL: <span class="font-mono bg-white px-2 py-1 rounded">${url}</span>`;
+    
+    // Show error message
+    if (data.data && data.data.basic_info && data.data.basic_info.note) {
+        errorMessage.textContent = data.data.basic_info.note;
+    } else if (data.error) {
+        errorMessage.textContent = `Error: ${data.error}`;
+    }
+    
+    // Show error details if available
+    if (data.errors && data.errors.length > 0) {
+        errorList.innerHTML = '';
+        data.errors.forEach(error => {
+            const li = document.createElement('li');
+            li.textContent = error;
+            errorList.appendChild(li);
+        });
+        errorDetails.classList.remove('hidden');
+    }
+    
+    // Show fallback README content if available
+    if (data.data && data.data.scraped_content && data.data.scraped_content.readme_content) {
+        const fallbackReadme = document.getElementById('fallback-readme');
+        const fallbackContent = document.getElementById('fallback-readme-content');
+        
+        const content = data.data.scraped_content.readme_content;
+        const truncated = content.length > 500 ? content.substring(0, 500) + '...' : content;
+        fallbackContent.innerHTML = `<pre class="whitespace-pre-wrap">${truncated}</pre>`;
+        fallbackReadme.classList.remove('hidden');
+    }
+    
+    errorState.classList.remove('hidden');
+}
+
+// Animated counter function
+function animateCounters() {
+    const counters = document.querySelectorAll('.counter');
+    
+    counters.forEach(counter => {
+        const target = parseInt(counter.getAttribute('data-target'));
+        const duration = 2000; // 2 seconds
+        const step = target / (duration / 16); // 60fps
+        let current = 0;
+        
+        const timer = setInterval(() => {
+            current += step;
+            if (current >= target) {
+                current = target;
+                clearInterval(timer);
+            }
+            
+            // Format the number with commas for large numbers
+            const displayValue = Math.floor(current).toLocaleString();
+            counter.textContent = displayValue;
+        }, 16);
+    });
+}
+</script>
+<script>
+// Simple Export Summary using HTML2Canvas (CDN)
+(function(){
+  const script = document.createElement('script');
+  script.src = 'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js';
+  script.async = true;
+  document.body.appendChild(script);
+})();
+
+document.addEventListener('click', async (e) => {
+  if (e.target.closest('#export-summary')) {
+    const card = document.querySelector('.feature-card');
+    if (!card || !window.html2canvas) return;
+    const canvas = await html2canvas(card, {backgroundColor: '#ffffff', scale: 2});
+    const link = document.createElement('a');
+    link.download = 'repo-summary.png';
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+  }
+  if (e.target.closest('#share-link')) {
+    const input = document.getElementById('repo-url-input');
+    const url = new URL(window.location);
+    url.searchParams.set('q', input.value.trim());
+    navigator.clipboard.writeText(url.toString()).then(()=>{
+      const btn = document.getElementById('share-link');
+      if (btn) { btn.textContent = 'Copied!'; setTimeout(()=>btn.textContent='Share', 1500); }
+    }).catch(()=>{});
+  }
+  if (e.target.closest('#export-pdf')) {
+    window.print();
+  }
+});
+</script>
+{% endblock %}

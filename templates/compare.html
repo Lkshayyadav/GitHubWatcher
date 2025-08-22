@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+
+{% block title %}Compare Repositories{% endblock %}
+
+{% block content %}
+<div class="min-h-screen py-12">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="mb-6">
+            <h1 class="text-3xl font-bold text-gray-900">Compare Repositories</h1>
+            <p class="text-gray-600 text-sm">Analyze two GitHub repositories side by side.</p>
+        </div>
+
+        <div class="glass-card rounded-2xl p-6 mb-6">
+            <form id="compare-form" class="grid md:grid-cols-2 gap-3">
+                <input type="url" id="repo-a" placeholder="https://github.com/owner/repo" class="cluely-search-input" required>
+                <input type="url" id="repo-b" placeholder="https://github.com/owner/repo" class="cluely-search-input" required>
+                <div class="md:col-span-2 flex justify-end">
+                    <button class="btn-primary text-sm px-4 py-2" type="submit"><i class="fas fa-balance-scale mr-1"></i>Compare</button>
+                </div>
+            </form>
+        </div>
+
+        <div id="compare-results" class="grid md:grid-cols-2 gap-6 hidden">
+            <div class="glass-card rounded-2xl p-6">
+                <h2 class="text-xl font-semibold mb-2">Repository A</h2>
+                <div id="results-a" class="text-sm text-gray-700 space-y-2"></div>
+            </div>
+            <div class="glass-card rounded-2xl p-6">
+                <h2 class="text-xl font-semibold mb-2">Repository B</h2>
+                <div id="results-b" class="text-sm text-gray-700 space-y-2"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+async function fetchAnalysis(url) {
+  const res = await fetch(`/api/analyze?url=${encodeURIComponent(url)}`);
+  return res.json();
+}
+
+function renderSummary(container, data) {
+  const d = data?.data || {};
+  const info = d.basic_info || {};
+  const act = d.activity_metrics || {};
+  const qual = d.code_quality || {};
+  container.innerHTML = `
+    <div><span class="text-gray-600">Name:</span> <span class="font-mono">${info.full_name || info.name || '—'}</span></div>
+    <div><span class="text-gray-600">Stars:</span> <span class="font-semibold">${act.stars ?? '—'}</span></div>
+    <div><span class="text-gray-600">Forks:</span> <span class="font-semibold">${act.forks ?? '—'}</span></div>
+    <div><span class="text-gray-600">Open Issues:</span> <span class="font-semibold">${act.open_issues ?? '—'}</span></div>
+    <div><span class="text-gray-600">Contributors:</span> <span class="font-semibold">${act.contributors_count ?? '—'}</span></div>
+    <div><span class="text-gray-600">Has README:</span> <span class="font-semibold">${qual.has_readme ? 'Yes' : 'No'}</span></div>
+  `;
+}
+
+document.getElementById('compare-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const a = document.getElementById('repo-a').value.trim();
+  const b = document.getElementById('repo-b').value.trim();
+  document.getElementById('compare-results').classList.add('hidden');
+  const [da, db] = await Promise.all([fetchAnalysis(a), fetchAnalysis(b)]);
+  renderSummary(document.getElementById('results-a'), da);
+  renderSummary(document.getElementById('results-b'), db);
+  document.getElementById('compare-results').classList.remove('hidden');
+});
+</script>
+{% endblock %}

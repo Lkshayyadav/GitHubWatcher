@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+
+{% block title %}Tech Stack & Architecture{% endblock %}
+
+{% block content %}
+<div class="min-h-screen py-12">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="mb-6">
+            <h1 class="text-3xl font-bold text-gray-900">Hackathon Tech Stack & Architecture</h1>
+            <p class="text-gray-600 mt-1">What powers this project and how each piece is used.</p>
+        </div>
+
+        <!-- Overview -->
+        <div class="glass-card rounded-2xl p-6 mb-6">
+            <h2 class="text-xl font-semibold text-gray-900 mb-2">Overview</h2>
+            <p class="text-gray-700 text-sm">This app analyzes public GitHub repositories, surfaces key metrics, and augments results with optional AI services.</p>
+        </div>
+
+        <!-- Components -->
+        <div class="grid md:grid-cols-2 gap-6">
+            <div class="glass-card rounded-2xl p-6">
+                <h3 class="text-lg font-semibold text-gray-900 mb-2">Data Sources</h3>
+                <ul class="space-y-2 text-sm text-gray-700">
+                    <li>
+                        <span class="font-semibold">GitHub API (PyGithub)</span>: Repository metadata, activity, languages, issues, contributors.
+                    </li>
+                    <li>
+                        <span class="font-semibold">Web Scraping (trafilatura/httpx)</span>: Fetch README content when API is limited.
+                    </li>
+                    <li>
+                        <span class="font-semibold">Caching (Redis)</span>: Optional cache for repeat analyses to speed up demos.
+                    </li>
+                </ul>
+            </div>
+
+            <div class="glass-card rounded-2xl p-6">
+                <h3 class="text-lg font-semibold text-gray-900 mb-2">AI & Insights</h3>
+                <ul class="space-y-2 text-sm text-gray-700">
+                    <li>
+                        <span class="font-semibold">Google Gemini</span>: Summarizes README, extracts features, status, and tech stack.
+                    </li>
+                    <li>
+                        <span class="font-semibold">Portia AI</span>: Code quality score, security insights, performance tips, and code review. Enabled when <code>PORTIA_API_KEY</code> is set and reachable.
+                    </li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Frameworks -->
+        <div class="grid md:grid-cols-2 gap-6 mt-6">
+            <div class="glass-card rounded-2xl p-6">
+                <h3 class="text-lg font-semibold text-gray-900 mb-2">Frameworks & Libraries</h3>
+                <ul class="space-y-2 text-sm text-gray-700">
+                    <li><span class="font-semibold">FastAPI</span>: Backend API and server.</li>
+                    <li><span class="font-semibold">Jinja2 + Tailwind</span>: Server-rendered pages with modern styling.</li>
+                    <li><span class="font-semibold">Chart.js</span>: Visualize language breakdowns and metrics.</li>
+                    <li><span class="font-semibold">Requests/httpx</span>: External HTTP calls.</li>
+                </ul>
+            </div>
+
+            <div class="glass-card rounded-2xl p-6">
+                <h3 class="text-lg font-semibold text-gray-900 mb-2">Why These Choices?</h3>
+                <ul class="space-y-2 text-sm text-gray-700">
+                    <li>Fast development velocity for hackathons.</li>
+                    <li>Simple deployment footprint (single Python app).</li>
+                    <li>Good UX with minimal JS and clean components.</li>
+                    <li>Optional AI integrations that degrade gracefully if unavailable.</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- How It Flows -->
+        <div class="glass-card rounded-2xl p-6 mt-6">
+            <h3 class="text-lg font-semibold text-gray-900 mb-3">How It Works</h3>
+            <ol class="list-decimal list-inside text-sm text-gray-700 space-y-2">
+                <li>User enters a GitHub URL on the Results page.</li>
+                <li>Backend extracts owner/repo and queries GitHub API; falls back to scraping README if needed.</li>
+                <li>Optional: Gemini summarizes README; Portia analyzes code quality and creates review insights.</li>
+                <li>Results are rendered with charts, scores, and recommendations.</li>
+                <li>Optional caching stores successful results to speed up future loads.</li>
+            </ol>
+        </div>
+
+        <!-- Config -->
+        <div class="glass-card rounded-2xl p-6 mt-6">
+            <h3 class="text-lg font-semibold text-gray-900 mb-2">Configuration</h3>
+            <pre class="bg-gray-50 rounded border p-3 text-xs overflow-x-auto"><code>GITHUB_API_KEY=&lt;optional&gt;
+GEMINI_API_KEY=&lt;optional&gt;
+PORTIA_API_KEY=&lt;recommended&gt;
+PORTIA_BASE_URL=https://api.portialabs.ai
+REDIS_HOST=localhost
+REDIS_PORT=6379
+REDIS_DB=0</code></pre>
+            <p class="text-xs text-gray-600 mt-2">AI features activate automatically when corresponding keys and network access are available.</p>
+        </div>
+    </div>
+</div>
+{% endblock %}

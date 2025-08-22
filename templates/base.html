@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}GitHub Repository Checker{% endblock %}</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', path='/css/style.css') }}">
+    
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+    <script>
+        (function() {
+            try {
+                const saved = localStorage.getItem('theme');
+                const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                if ((saved === 'dark') || (!saved && prefersDark)) {
+                    document.documentElement.classList.add('dark');
+                } else {
+                    document.documentElement.classList.remove('dark');
+                }
+            } catch (e) {}
+        })();
+    </script>
+    {% block head %}{% endblock %}
+    </head>
+<body class="gradient-bg min-h-screen">
+    <!-- Navigation -->
+    <nav class="navbar-blur sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-12">
+                <div class="flex items-center">
+                    <a href="/" class="flex items-center space-x-2">
+                        <i class="fab fa-github text-lg text-gray-800"></i>
+                        <span class="text-base font-semibold text-gray-800">RepoChecker</span>
+                    </a>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <a href="/" class="text-gray-700 hover:text-gray-900 px-2 py-1 rounded-md text-xs font-medium">Home</a>
+                    <a href="/about" class="text-gray-700 hover:text-gray-900 px-2 py-1 rounded-md text-xs font-medium">About</a>
+                    <a href="/stack" class="text-gray-700 hover:text-gray-900 px-2 py-1 rounded-md text-xs font-medium">Tech Stack</a>
+                    <a href="/compare" class="text-gray-700 hover:text-gray-900 px-2 py-1 rounded-md text-xs font-medium">Compare</a>
+                    <button id="theme-toggle" class="theme-switch" aria-label="Toggle dark mode" title="Toggle theme">
+                        <span class="theme-thumb"></span>
+                        <span class="sr-only">Toggle dark mode</span>
+                    </button>
+                    <a href="/results" class="btn-primary text-xs font-semibold hidden sm:inline-flex items-center">
+                        <i class="fas fa-rocket mr-1"></i>
+                        Get Started
+                    </a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main>
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Footer -->
+    <footer class="mt-8">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="grid md:grid-cols-4 gap-6 py-6 glass-card rounded-lg">
+                <div>
+                    <div class="flex items-center space-x-2 mb-2">
+                        <i class="fab fa-github text-base text-gray-800"></i>
+                        <span class="text-sm font-semibold text-gray-800">RepoChecker</span>
+                    </div>
+                    <p class="text-xs text-gray-600">Analyze GitHub repos with elegant UI and AI insights.</p>
+                </div>
+                <div>
+                    <h4 class="text-gray-900 font-semibold mb-1 text-sm">Product</h4>
+                    <ul class="space-y-1 text-xs text-gray-600">
+                        <li><a href="/" class="hover:text-gray-900">Home</a></li>
+                        <li><a href="/results" class="hover:text-gray-900">Analyzer</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h4 class="text-gray-900 font-semibold mb-1 text-sm">Resources</h4>
+                    <ul class="space-y-1 text-xs text-gray-600">
+                        <li><a href="/about" class="hover:text-gray-900">About</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h4 class="text-gray-900 font-semibold mb-1 text-sm">Get Started</h4>
+                    <a href="/results" class="btn-primary inline-flex items-center text-xs">
+                        <i class="fas fa-search mr-1"></i>
+                        Analyze a Repo
+                    </a>
+                </div>
+            </div>
+            <div class="py-6 text-center text-gray-600 text-sm">
+                <p>&copy; 2025 RepoChecker. Built with FastAPI and Tailwind CSS.</p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Custom JavaScript -->
+    <script src="{{ url_for('static', path='/js/main.js') }}"></script>
+</body>
+</html>
