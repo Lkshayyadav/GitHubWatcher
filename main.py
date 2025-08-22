@@ -1,28 +1,5 @@
-from fastapi import FastAPI, Request
-from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
-
-# Add this line to create a new FastAPI app instance
-app = FastAPI()
-
-# Mount the static files (CSS and JS)
-app.mount("/static", StaticFiles(directory="static"), name="static")
-
-# Configure the templates directory
-templates = Jinja2Templates(directory="templates")
-
-
-# Define a route to serve your index.html page
-@app.get("/")
-def serve_index(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
-
-
-# The rest of your code, including the /analyze endpoint, goes here
-
 import os
 from pathlib import Path
-
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -34,10 +11,10 @@ try:
             load_dotenv(dotenv_path=str(env_path), override=False)
 except Exception:
     pass
+
 import base64
 import hashlib
 import json
-import os
 import re
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
@@ -51,7 +28,6 @@ from fastapi.templating import Jinja2Templates
 # Try to import optional dependencies
 try:
     import redis
-
     REDIS_AVAILABLE = True
 except ImportError:
     REDIS_AVAILABLE = False
@@ -59,7 +35,6 @@ except ImportError:
 
 try:
     from github import Github
-
     GITHUB_AVAILABLE = True
 except ImportError:
     GITHUB_AVAILABLE = False
@@ -67,7 +42,6 @@ except ImportError:
 
 try:
     import google.generativeai as genai
-
     GENAI_AVAILABLE = True
 except ImportError:
     GENAI_AVAILABLE = False
@@ -75,7 +49,6 @@ except ImportError:
 
 try:
     import trafilatura
-
     TRAFILATURA_AVAILABLE = True
 except ImportError:
     TRAFILATURA_AVAILABLE = False
@@ -84,7 +57,6 @@ except ImportError:
 # Portia AI Integration
 try:
     import requests
-
     PORTIA_AVAILABLE = True
 except ImportError:
     PORTIA_AVAILABLE = False
@@ -92,13 +64,13 @@ except ImportError:
 
 # Create FastAPI app instance
 app = FastAPI(
-    title="GitHub Repository Checker", description="A modern tool for checking GitHub repositories"
+    title="GitHub Repository Checker", 
+    description="A modern tool for checking GitHub repositories"
 )
 
 # CORS and security headers
 try:
     from fastapi.middleware.cors import CORSMiddleware
-
     cors_origins = os.getenv("CORS_ORIGINS", "*")
     allow_origins = [o.strip() for o in cors_origins.split(",")] if cors_origins else ["*"]
     app.add_middleware(
@@ -110,7 +82,6 @@ try:
     )
 except Exception:
     pass
-
 
 @app.middleware("http")
 async def add_security_headers(request, call_next):
@@ -125,7 +96,6 @@ async def add_security_headers(request, call_next):
     except Exception:
         pass
     return response
-
 
 # Initialize Redis client if available
 redis_client = None
@@ -187,10 +157,9 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 # Setup Jinja2 templates
 templates = Jinja2Templates(directory="templates")
 
-# Feature flags
-ENABLE_PORTIA = os.getenv("ENABLE_PORTIA", "true").lower() not in ["false", "0", "no"]
-ENABLE_GEMINI = os.getenv("ENABLE_GEMINI", "true").lower() not in ["false", "0", "no"]
-
+# Configuration flags
+ENABLE_GEMINI = os.getenv("ENABLE_GEMINI", "true").lower() == "true"
+ENABLE_PORTIA = os.getenv("ENABLE_PORTIA", "true").lower() == "true"
 
 # Helper functions
 def generate_cache_key(url: str) -> str:
