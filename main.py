@@ -62,10 +62,27 @@ except ImportError:
     PORTIA_AVAILABLE = False
     print("Warning: Requests not available. Portia AI integration will be disabled.")
 
-# Create FastAPI app instance
+# Create FastAPI app instance with lifespan
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    try:
+        print("Server has started. Visit: http://127.0.0.1:5000")
+    except Exception:
+        pass
+    yield
+    # Shutdown
+    try:
+        print("Server is shutting down...")
+    except Exception:
+        pass
+
 app = FastAPI(
     title="GitHub Repository Checker", 
-    description="A modern tool for checking GitHub repositories"
+    description="A modern tool for checking GitHub repositories",
+    lifespan=lifespan
 )
 
 # CORS and security headers
@@ -106,12 +123,16 @@ if REDIS_AVAILABLE:
             port=int(os.getenv("REDIS_PORT", 6379)),
             db=int(os.getenv("REDIS_DB", 0)),
             decode_responses=True,
+            socket_connect_timeout=5,  # 5 second timeout
+            socket_timeout=5,
+            retry_on_timeout=True,
         )
         # Test connection
         redis_client.ping()
         print("Redis connected successfully")
     except Exception as e:
         print(f"Redis connection failed: {e}")
+        print("Continuing without Redis - caching will be disabled")
         redis_client = None
 
 # Initialize GitHub client if available
@@ -1701,13 +1722,6 @@ if __name__ == "__main__":
         print("Check at: http://127.0.0.1:5000")
     except Exception:
         pass
-
-    @app.on_event("startup")
-    async def _announce_start():
-        try:
-            print("Server has started. Visit: http://127.0.0.1:5000")
-        except Exception:
-            pass
 
     port = int(os.getenv("PORT", "5000"))
     uvicorn.run(app, host="0.0.0.0", port=port)
